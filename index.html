@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Material Distribution System</title>
     
-    <!-- PapaParse for CSV reading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     
-    <!-- Using a more stable library for PDF generation that works well on both PC and Mobile -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
@@ -27,53 +24,54 @@
         .btn-print:hover { background-color: #218838; }
         .action-buttons { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
         
-        /* Print Area Styling */
-        /* A4 Size Ratio roughly 1 : 1.414 */
-        #printAreaWrapper { margin-top: 30px; display: none; overflow-x: auto; background: #ddd; padding: 20px; }
+        /* Print Area Wrapper for proper viewing */
+        #printAreaWrapper { margin-top: 30px; display: none; overflow-x: auto; background: #ddd; padding: 20px; border-radius: 8px; }
         
+        /* Print Canvas - A4 Formatting */
         #printArea { 
             background: #fff; 
             position: relative; 
-            padding: 40px; 
-            width: 210mm; /* A4 width */
-            min-height: 297mm; /* A4 height */
             box-sizing: border-box;
             margin: 0 auto;
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            padding: 20px;
         }
         
-        /* Watermark & Logo Styling */
-        .watermark { 
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%); 
-            opacity: 0.1; 
-            width: 500px; 
-            z-index: 0; 
-            pointer-events: none; 
+        /* Perfect Repeating Watermark */
+        #watermarkBg {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 0;
+            opacity: 0.15;
+            background-repeat: repeat-y; 
+            background-position: center top;
+            background-size: 60%; /* Logo size */
+            pointer-events: none;
         }
         
+        /* Content Styling */
         .print-content { position: relative; z-index: 1; width: 100%; }
         .print-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
         .corner-logo { height: 80px; width: auto; object-fit: contain; }
         
-        .company-header { text-align: center; font-weight: bold; font-size: 20px; flex: 1; }
+        .company-header { text-align: center; font-weight: bold; font-size: 18px; flex: 1; }
         .doc-title { text-align: center; font-size: 16px; margin-bottom: 20px; text-decoration: underline; font-weight: bold; text-transform: uppercase; }
         .meta-info { display: flex; justify-content: space-between; flex-wrap: wrap; margin-bottom: 15px; font-size: 15px; font-weight: bold; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: rgba(255,255,255,0.8); page-break-inside: auto; font-family: Arial, sans-serif; }
-        th, td { border: 1px solid #000; padding: 10px 8px; text-align: left; font-size: 14px; }
-        th { background-color: #f0f0f0; font-weight: bold; text-align: center; }
+        /* Transparent Table to show watermark */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background-color: transparent !important; page-break-inside: auto; font-family: Arial, sans-serif; }
+        th, td { border: 1px solid #000; padding: 10px 8px; text-align: left; font-size: 14px; background-color: transparent !important; }
+        th { background-color: rgba(230, 230, 230, 0.6) !important; font-weight: bold; text-align: center; }
         tr { page-break-inside: avoid; page-break-after: auto; }
         
         #loader { color: #1976d2; font-weight: bold; font-size: 14px; text-align: center; display: none; margin-bottom: 15px; }
         
+        /* Standard PC Print CSS */
         @media print {
             body { background-color: #fff; margin: 0; padding: 0; }
             .no-print { display: none !important; }
-            #printAreaWrapper { padding: 0; background: none; display: block !important; overflow: visible; }
-            #printArea { padding: 0; width: 100%; box-shadow: none; min-height: auto; }
+            #printAreaWrapper { padding: 0; background: none; display: block !important; overflow: visible; box-shadow: none; }
+            #printArea { width: 100% !important; padding: 0 !important; box-shadow: none; }
             @page { margin: 10mm; size: A4 portrait; }
             thead { display: table-header-group; }
         }
@@ -122,23 +120,20 @@
     
     <div class="action-buttons">
         <button onclick="generateTable()">1. Generate List (View)</button>
-        <!-- Standard Print (Works best on PC) -->
         <button class="btn-print" onclick="window.print()">2. Print / Save as PDF (PC)</button>
-        <!-- Custom PDF Download (Works best on Mobile) -->
         <button class="btn-print" onclick="downloadMobilePDF()" style="background-color: #dc3545;">3. Download PDF (Mobile)</button>
     </div>
 </div>
 
 <div id="printAreaWrapper">
     <div id="printArea">
-        <img id="watermarkImg" class="watermark" src="logo.png" alt="Watermark" onerror="this.style.display='none'">
+        <div id="watermarkBg"></div>
         
         <div class="print-content">
             <div class="print-header-row">
-                <img id="cornerLogo" class="corner-logo" src="logo.png" alt="Logo" onerror="this.style.display='none'">
+                <img id="cornerLogo" class="corner-logo" src="" alt="Logo" onerror="this.style.display='none'">
                 <div class="company-header">SUMEET ELKOPLAST KALYAN MSW PVT. LTD.,<br>Kalyan, MUMBAI.</div>
-                <div style="width: 80px;"></div> <!-- Spacer for balance -->
-            </div>
+                <div style="width: 80px;"></div> </div>
             
             <div class="doc-title">PP & Kit - Material Distribution List (<span id="out_material"></span>)</div>
             
@@ -164,13 +159,13 @@
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqyrjPp7jAyDOMkiV2BVuKkzS9FvmHoTQOq5d-9fyJxSmw0E4OVKVPix62Cuzs9d7Mx9ameMUtZIC-/pub?output=csv";
     let empData = [];
     
-    // Yaha tumcha GitHub varcha logo path/link asel
+    // GITHUB LOGO URL HERE
     const GITHUB_LOGO_URL = "logo.png"; 
 
     window.onload = function() {
-        // Pre-load logo images
+        // Set logos dynamically
         document.getElementById('cornerLogo').src = GITHUB_LOGO_URL;
-        document.getElementById('watermarkImg').src = GITHUB_LOGO_URL;
+        document.getElementById('watermarkBg').style.backgroundImage = `url('${GITHUB_LOGO_URL}')`;
         
         fetchCSVFromGoogleSheet();
     };
@@ -352,8 +347,7 @@
         document.getElementById('printAreaWrapper').style.display = 'block';
     }
 
-    // Robust Mobile PDF Download using html2canvas and jsPDF
-    window.jsPDF = window.jspdf.jsPDF;
+    // New Powerful Mobile PDF Download using html2pdf.js
     function downloadMobilePDF() {
         const element = document.getElementById('printArea');
         if(element.parentElement.style.display === 'none') {
@@ -363,53 +357,31 @@
 
         const btn = document.activeElement;
         const oldText = btn.innerText;
-        btn.innerText = "Processing PDF...";
+        btn.innerText = "PDF Tayar hot ahe, thamba...";
+
+        // Set fixed width for proper A4 formatting on Mobile Canvas
+        element.style.width = '210mm';
         
         let shiftStr = document.getElementById('shift').value || "All";
         let unitStr = document.getElementById('unit').value || "All";
         let fileName = `Material_List_${shiftStr}_${unitStr}.pdf`;
 
-        // Temporarily adjust styles for perfect capture
-        element.style.transform = 'scale(1)';
-        element.style.width = '210mm'; 
+        var opt = {
+            margin:       [5, 5, 5, 5], 
+            filename:     fileName,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, allowTaint: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
 
-        html2canvas(element, { 
-            scale: 2, 
-            useCORS: true,
-            allowTaint: true,
-            logging: false 
-        }).then(canvas => {
-            const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            
-            // A4 dimensions in mm
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-            
-            // Handle multi-page if content is longer than one A4
-            let heightLeft = pdfHeight;
-            let position = 0;
-            const pageHeight = pdf.internal.pageSize.getHeight();
-
-            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pageHeight;
-
-            while (heightLeft >= 0) {
-                position = heightLeft - pdfHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-                heightLeft -= pageHeight;
-            }
-            
-            pdf.save(fileName);
+        html2pdf().set(opt).from(element).save().then(() => {
             btn.innerText = oldText;
-            
-            // Reset styles
-            element.style.width = '210mm'; 
+            element.style.width = 'auto'; // Reset width after generation
         }).catch(err => {
             console.error(err);
             alert("PDF generate karnyat adchan aali.");
             btn.innerText = oldText;
+            element.style.width = 'auto';
         });
     }
 </script>
