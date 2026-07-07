@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Material Distribution System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+        body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #2c3e50; margin-top: 0; font-size: 22px; }
+        .form-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
+        .form-group { flex: 1; min-width: 150px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; font-size: 14px; }
+        select, input[type="text"], input[type="url"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+        button { padding: 10px 20px; background-color: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; font-weight: 500; transition: background 0.3s; width: 100%; margin-top: 5px; }
+        button:hover { background-color: #0056b3; }
+        .btn-print { background-color: #28a745; }
+        .btn-print:hover { background-color: #218838; }
+        
+        /* Print Area */
+        #printArea { margin-top: 30px; border: 1px solid #ddd; padding: 20px; display: none; background: #fff; position: relative; overflow: hidden; }
+        
+        /* Watermark & Logo Styling */
+        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.1; width: 50%; z-index: 0; pointer-events: none; }
+        .print-content { position: relative; z-index: 1; }
+        .print-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .corner-logo { height: 70px; object-fit: contain; }
+        
+        .company-header { text-align: center; font-weight: bold; font-size: 18px; flex: 1; }
+        .doc-title { text-align: center; font-size: 15px; margin-bottom: 15px; text-decoration: underline; font-weight: bold; }
+        .meta-info { display: flex; justify-content: space-between; flex-wrap: wrap; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: transparent; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: left; font-size: 13px; }
+        th { background-color: #f8f9fa; }
+        
+        #loader { color: #1976d2; font-weight: bold; font-size: 14px; text-align: center; display: none; margin-bottom: 15px; }
+        
+        @media print {
+            body { background-color: #fff; margin: 0; padding: 0; }
+            .no-print { display: none !important; }
+            #printArea { display: block !important; border: none; margin: 0; padding: 0; overflow: hidden; }
+            @page { margin: 10mm; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container no-print">
+    <h2>Material Distribution Generator</h2>
+    
+    <div class="form-row">
+        <div class="form-group">
+            <label for="logoUrl">Sumeet Logo Chi Link (URL) Taka (Optional):</label>
+            <!-- Tumi tumchya logo chi original link ithe default value madhye taku shakta -->
+            <input type="url" id="logoUrl" placeholder="https://... logo link taka">
+        </div>
+    </div>
+
+    <div id="loader">Google Sheet madhun Live Data load hot ahe, krupaya thamba...</div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label for="shift">1. Shift Select Kara</label>
+            <select id="shift" onchange="updateUnits()"><option value="">Aadhi data load kara</option></select>
+        </div>
+        <div class="form-group">
+            <label for="ward">2. Ward</label>
+            <select id="ward"><option value="">All Wards</option></select>
+        </div>
+        <div class="form-group">
+            <label for="unit">3. Unit</label>
+            <select id="unit"><option value="">All Units</option></select>
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <div class="form-group">
+            <label for="material">Material Type</label>
+            <select id="material" onchange="toggleCustomMaterial()">
+                <option value="Uniform">Uniform</option>
+                <option value="Raincoat">Raincoat</option>
+                <option value="Shoes">Shoes</option>
+                <option value="Hand gloves">Hand gloves</option>
+                <option value="Mask">Mask</option>
+                <option value="Custom">Other (Custom Material)</option>
+            </select>
+            <input type="text" id="customMaterial" placeholder="Material che naav taka" style="display:none; margin-top: 10px;">
+        </div>
+        <div class="form-group">
+            <label for="supervisor">Supervisor Name</label>
+            <input type="text" id="supervisor" placeholder="Supervisor che naav taka">
+        </div>
+    </div>
+    
+    <div style="display: flex; gap: 10px;">
+        <button onclick="generateTable()">Generate List</button>
+        <button class="btn-print" onclick="window.print()">Download / Print PDF</button>
+    </div>
+</div>
+
+<!-- PDF Print Area -->
+<div id="printArea">
+    <!-- Watermark Image Background -->
+    <img id="watermarkImg" class="watermark" src="" alt="" style="display: none;">
+    
+    <div class="print-content">
+        <div class="print-header-row">
+            <!-- Corner Logo -->
+            <img id="cornerLogo" class="corner-logo" src="" alt="Logo" style="display: none;">
+            <div class="company-header">SUMEET ELKOPLAST KALYAN MSW PVT. LTD., Kalyan, MUMBAI.</div>
+            <div style="width: 70px;"></div> <!-- Spacer so title stays centered -->
+        </div>
+        
+        <div class="doc-title">PP & Kit - Material Distribution List (<span id="out_material"></span>)</div>
+        
+        <div class="meta-info">
+            <div>Supervisor Name: <span id="out_supervisor" style="border-bottom: 1px dashed #000; padding-right: 50px;"></span></div>
+            <div>Date: <span style="border-bottom: 1px dashed #000; padding-right: 80px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>
+        </div>
+        <div class="meta-info">
+            <div>Admin Ward: <span id="out_ward"></span></div>
+            <div>Unit Nos.: <span id="out_unit"></span></div>
+            <div>Shift: <span id="out_shift"></span></div>
+        </div>
+        
+        <table>
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Tumchi live Google Sheets chi link
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqyrjPp7jAyDOMkiV2BVuKkzS9FvmHoTQOq5d-9fyJxSmw0E4OVKVPix62Cuzs9d7Mx9ameMUtZIC-/pub?output=csv";
+    let empData = [];
+    
+    window.onload = function() {
+        fetchCSVFromGoogleSheet();
+    };
+
+    function fetchCSVFromGoogleSheet() {
+        document.getElementById('loader').style.display = 'block';
+        
+        Papa.parse(CSV_URL, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                document.getElementById('loader').style.display = 'none';
+                
+                let rawData = results.data;
+                empData = [];
+                
+                rawData.forEach(row => {
+                    let cleanRow = {};
+                    // clean spacing from headers
+                    for (let key in row) {
+                        cleanRow[key.trim().toUpperCase()] = row[key];
+                    }
+                    
+                    let empid = cleanRow['EMPID'] || cleanRow['EMP ID'] || cleanRow['ID'];
+                    if (empid) {
+                        empData.push({
+                            empid: empid,
+                            name: cleanRow['EMPLOYEE NAME'] || cleanRow['NAME'] || '',
+                            desig: cleanRow['OPS DESIGNATION'] || cleanRow['DESIGNATION'] || '',
+                            ward: cleanRow['AD. WARD'] || cleanRow['WARD'] || '',
+                            unit: cleanRow['UNIT'] || '',
+                            shift: cleanRow['SHIFT'] || ''
+                        });
+                    }
+                });
+
+                if(empData.length > 0) {
+                    populateInitialDropdowns();
+                } else {
+                    alert("Google Sheet madhye data sapadla nahi, krupaya column headers check kara.");
+                }
+            },
+            error: function(err) {
+                document.getElementById('loader').style.display = 'none';
+                alert("Error: Google Sheet varun data load karta ala nahi.");
+            }
+        });
+    }
+
+    function populateInitialDropdowns() {
+        let shifts = new Set();
+        let wards = new Set();
+        
+        empData.forEach(d => {
+            if(d.shift) shifts.add(String(d.shift).trim().toUpperCase());
+            if(d.ward) wards.add(String(d.ward).trim().toUpperCase());
+        });
+        
+        const populate = (id, set, allLabel) => {
+            let select = document.getElementById(id);
+            select.innerHTML = '<option value="">' + allLabel + '</option>';
+            [...set].sort().forEach(val => {
+                if(val) {
+                    let opt = document.createElement('option');
+                    opt.value = val;
+                    opt.innerHTML = val;
+                    select.appendChild(opt);
+                }
+            });
+        };
+        
+        populate('shift', shifts, 'All Shifts');
+        populate('ward', wards, 'All Wards');
+        
+        updateUnits();
+    }
+    
+    // Shift varun auto unit filter
+    function updateUnits() {
+        const shift = document.getElementById('shift').value;
+        const unitSelect = document.getElementById('unit');
+        
+        unitSelect.innerHTML = '<option value="">All Units</option>';
+        
+        if(empData.length === 0) return;
+        
+        let allowedUnits = new Set();
+        
+        if (shift === 'B' || shift === 'C') {
+            allowedUnits.add('DEPOT');
+        } else {
+            empData.forEach(d => {
+                if (shift === '' || String(d.shift).trim().toUpperCase() === shift) {
+                    if(d.unit) allowedUnits.add(String(d.unit).trim().toUpperCase());
+                }
+            });
+        }
+        
+        [...allowedUnits].sort().forEach(val => {
+            let opt = document.createElement('option');
+            opt.value = val;
+            opt.innerHTML = val;
+            unitSelect.appendChild(opt);
+        });
+    }
+    
+    function toggleCustomMaterial() {
+        let mat = document.getElementById('material').value;
+        let customInput = document.getElementById('customMaterial');
+        if(mat === 'Custom') {
+            customInput.style.display = 'block';
+            customInput.focus();
+        } else {
+            customInput.style.display = 'none';
+        }
+    }
+
+    function generateTable() {
+        if(empData.length === 0) {
+            alert("Data load honyachi vaat paha kiva internet connection check kara!");
+            return;
+        }
+        
+        // Logo setup for Print
+        const logoUrl = document.getElementById('logoUrl').value.trim();
+        const cornerLogo = document.getElementById('cornerLogo');
+        const watermarkImg = document.getElementById('watermarkImg');
+        
+        if(logoUrl) {
+            cornerLogo.src = logoUrl;
+            watermarkImg.src = logoUrl;
+            cornerLogo.style.display = 'block';
+            watermarkImg.style.display = 'block';
+        } else {
+            cornerLogo.style.display = 'none';
+            watermarkImg.style.display = 'none';
+        }
+
+        const shift = document.getElementById('shift').value;
+        const ward = document.getElementById('ward').value;
+        const unit = document.getElementById('unit').value;
+        const supervisor = document.getElementById('supervisor').value;
+        
+        let material = document.getElementById('material').value;
+        if(material === 'Custom') {
+            material = document.getElementById('customMaterial').value || "Custom Material";
+        }
+        
+        document.getElementById('out_material').innerText = material;
+        document.getElementById('out_supervisor').innerText = supervisor || "_________________";
+        document.getElementById('out_ward').innerText = ward || "All";
+        document.getElementById('out_unit').innerText = unit || "All";
+        document.getElementById('out_shift').innerText = shift || "All";
+        
+        let showSize = (document.getElementById('material').value === 'Uniform' || document.getElementById('material').value === 'Shoes');
+        
+        let filtered = empData.filter(d => 
+            (shift === '' || String(d.shift).trim().toUpperCase() === shift) &&
+            (ward === '' || String(d.ward).trim().toUpperCase() === ward) &&
+            (unit === '' || String(d.unit).trim().toUpperCase() === unit)
+        );
+        
+        let thead = '<tr><th style="width: 50px;">Sr No</th><th style="width: 80px;">EMP ID</th><th>Employee Name</th><th>Designation</th>';
+        if (showSize) {
+            thead += '<th style="width: 80px;">Size</th>';
+        }
+        thead += '<th style="width: 100px;">Signature</th></tr>';
+        document.getElementById('tableHead').innerHTML = thead;
+        
+        let tbody = '';
+        if(filtered.length === 0) {
+            tbody = `<tr><td colspan="${showSize ? 6 : 5}" style="text-align:center;">No records found</td></tr>`;
+        } else {
+            filtered.forEach((d, i) => {
+                tbody += `<tr>
+                    <td>${i+1}</td>
+                    <td>${d.empid}</td>
+                    <td>${d.name}</td>
+                    <td>${d.desig}</td>`;
+                if (showSize) tbody += '<td></td>';
+                tbody += '<td></td></tr>';
+            });
+        }
+        
+        // At the end, add 5 blank rows
+        let startIndex = filtered.length + 1;
+        for(let j = 0; j < 5; j++) {
+            tbody += `<tr>
+                <td style="height: 30px;">${startIndex + j}</td>
+                <td></td>
+                <td></td>
+                <td></td>`;
+            if (showSize) tbody += '<td></td>';
+            tbody += '<td></td></tr>';
+        }
+        
+        document.getElementById('tableBody').innerHTML = tbody;
+        document.getElementById('printArea').style.display = 'block';
+    }
+</script>
+</body>
+</html>
