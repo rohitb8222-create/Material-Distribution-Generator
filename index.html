@@ -4,7 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Material Distribution System</title>
+    
+    <!-- PapaParse for CSV reading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- html2pdf for Mobile Friendly PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
@@ -13,38 +19,36 @@
         .form-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
         .form-group { flex: 1; min-width: 150px; }
         label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; font-size: 14px; }
-        select, input[type="text"], input[type="url"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+        select, input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
         button { padding: 10px 20px; background-color: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; font-weight: 500; transition: background 0.3s; width: 100%; margin-top: 5px; }
         button:hover { background-color: #0056b3; }
         .btn-print { background-color: #28a745; }
         .btn-print:hover { background-color: #218838; }
         
-        /* Print Area */
-        #printArea { margin-top: 30px; border: 1px solid #ddd; padding: 20px; display: none; background: #fff; position: relative; overflow: hidden; }
+        /* Print Area Styling for PDF capture */
+        #printArea { margin-top: 30px; border: 1px solid #ddd; padding: 20px; display: none; background: #fff; position: relative; min-height: 500px; }
         
         /* Watermark & Logo Styling */
-        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.1; width: 50%; z-index: 0; pointer-events: none; }
+        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.1; width: 60%; z-index: 0; pointer-events: none; }
         .print-content { position: relative; z-index: 1; }
         .print-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .corner-logo { height: 70px; object-fit: contain; }
+        .corner-logo { height: 70px; width: 70px; object-fit: contain; }
         
         .company-header { text-align: center; font-weight: bold; font-size: 18px; flex: 1; }
         .doc-title { text-align: center; font-size: 15px; margin-bottom: 15px; text-decoration: underline; font-weight: bold; }
         .meta-info { display: flex; justify-content: space-between; flex-wrap: wrap; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: transparent; }
+        
+        /* Ensure table background is transparent so watermark is visible */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: transparent; position: relative; z-index: 2; }
         th, td { border: 1px solid #333; padding: 8px; text-align: left; font-size: 13px; }
-        th { background-color: #f8f9fa; }
+        th { background-color: rgba(248, 249, 250, 0.9); } 
         
         #loader { color: #1976d2; font-weight: bold; font-size: 14px; text-align: center; display: none; margin-bottom: 15px; }
         
+        /* Hide UI elements while creating PDF */
         @media print {
-            body { background-color: #fff; margin: 0; padding: 0; }
             .no-print { display: none !important; }
-            #printArea { display: block !important; border: none; margin: 0; padding: 0; overflow: hidden; }
-            @page { margin: 10mm; }
-            table { page-break-inside: auto; }
-            tr { page-break-inside: avoid; page-break-after: auto; }
-            thead { display: table-header-group; }
+            #printArea { border: none; margin: 0; padding: 0; }
         }
     </style>
 </head>
@@ -54,10 +58,9 @@
     <h2>Material Distribution Generator</h2>
     
     <div class="form-row">
-        <div class="form-group">
-            <label for="logoUrl">Sumeet Logo Chi Link (URL) Taka (Optional):</label>
-            <!-- Tumi tumchya logo chi original link ithe default value madhye taku shakta -->
-            <input type="url" id="logoUrl" placeholder="https://... logo link taka">
+        <div class="form-group" style="background: #e3f2fd; padding: 10px; border-radius: 5px; border: 1px dashed #90caf9;">
+            <label for="logoUpload" style="color: #0d47a1; font-weight: bold;">Sumeet Logo Select Kara (Watermark & Corner sathi):</label>
+            <input type="file" id="logoUpload" accept="image/*" style="background: #fff;">
         </div>
     </div>
 
@@ -97,23 +100,24 @@
         </div>
     </div>
     
-    <div style="display: flex; gap: 10px;">
+    <div style="display: flex; gap: 10px; margin-top: 15px;">
         <button onclick="generateTable()">Generate List</button>
-        <button class="btn-print" onclick="window.print()">Download / Print PDF</button>
+        <!-- Modified to use Mobile Friendly PDF Download -->
+        <button class="btn-print" onclick="downloadPDF()">Download PDF</button>
     </div>
 </div>
 
-<!-- PDF Print Area -->
+<!-- PDF Generate honyasathi Area -->
 <div id="printArea">
     <!-- Watermark Image Background -->
-    <img id="watermarkImg" class="watermark" src="" alt="" style="display: none;">
+    <img id="watermarkImg" class="watermark" src="" alt="Watermark" style="display: none;">
     
     <div class="print-content">
         <div class="print-header-row">
             <!-- Corner Logo -->
             <img id="cornerLogo" class="corner-logo" src="" alt="Logo" style="display: none;">
             <div class="company-header">SUMEET ELKOPLAST KALYAN MSW PVT. LTD., Kalyan, MUMBAI.</div>
-            <div style="width: 70px;"></div> <!-- Spacer so title stays centered -->
+            <div id="cornerSpacer" style="width: 70px; display: none;"></div> <!-- Spacer so title stays centered -->
         </div>
         
         <div class="doc-title">PP & Kit - Material Distribution List (<span id="out_material"></span>)</div>
@@ -136,13 +140,28 @@
 </div>
 
 <script>
-    // Tumchi live Google Sheets chi link
+    // Live Google Sheets Link
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqyrjPp7jAyDOMkiV2BVuKkzS9FvmHoTQOq5d-9fyJxSmw0E4OVKVPix62Cuzs9d7Mx9ameMUtZIC-/pub?output=csv";
     let empData = [];
+    let logoBase64 = ""; // Storing uploaded image
     
     window.onload = function() {
         fetchCSVFromGoogleSheet();
     };
+
+    // File Upload Handler for Logo
+    document.getElementById('logoUpload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if(file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                logoBase64 = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        } else {
+            logoBase64 = "";
+        }
+    });
 
     function fetchCSVFromGoogleSheet() {
         document.getElementById('loader').style.display = 'block';
@@ -159,7 +178,6 @@
                 
                 rawData.forEach(row => {
                     let cleanRow = {};
-                    // clean spacing from headers
                     for (let key in row) {
                         cleanRow[key.trim().toUpperCase()] = row[key];
                     }
@@ -180,12 +198,12 @@
                 if(empData.length > 0) {
                     populateInitialDropdowns();
                 } else {
-                    alert("Google Sheet madhye data sapadla nahi, krupaya column headers check kara.");
+                    alert("Google Sheet madhye data sapadla nahi. Headers tasech ahet ka check kara.");
                 }
             },
             error: function(err) {
                 document.getElementById('loader').style.display = 'none';
-                alert("Error: Google Sheet varun data load karta ala nahi.");
+                alert("Error: Data load karta aala nahi.");
             }
         });
     }
@@ -218,7 +236,6 @@
         updateUnits();
     }
     
-    // Shift varun auto unit filter
     function updateUnits() {
         const shift = document.getElementById('shift').value;
         const unitSelect = document.getElementById('unit');
@@ -229,6 +246,7 @@
         
         let allowedUnits = new Set();
         
+        // B and C shift logic
         if (shift === 'B' || shift === 'C') {
             allowedUnits.add('DEPOT');
         } else {
@@ -260,23 +278,25 @@
 
     function generateTable() {
         if(empData.length === 0) {
-            alert("Data load honyachi vaat paha kiva internet connection check kara!");
+            alert("Data load honyachi vaat paha!");
             return;
         }
-        
-        // Logo setup for Print
-        const logoUrl = document.getElementById('logoUrl').value.trim();
+
+        // Apply Logo & Watermark if uploaded
         const cornerLogo = document.getElementById('cornerLogo');
         const watermarkImg = document.getElementById('watermarkImg');
+        const spacer = document.getElementById('cornerSpacer');
         
-        if(logoUrl) {
-            cornerLogo.src = logoUrl;
-            watermarkImg.src = logoUrl;
+        if(logoBase64) {
+            cornerLogo.src = logoBase64;
+            watermarkImg.src = logoBase64;
             cornerLogo.style.display = 'block';
             watermarkImg.style.display = 'block';
+            spacer.style.display = 'block';
         } else {
             cornerLogo.style.display = 'none';
             watermarkImg.style.display = 'none';
+            spacer.style.display = 'none';
         }
 
         const shift = document.getElementById('shift').value;
@@ -325,7 +345,7 @@
             });
         }
         
-        // At the end, add 5 blank rows
+        // Add 5 blank rows
         let startIndex = filtered.length + 1;
         for(let j = 0; j < 5; j++) {
             tbody += `<tr>
@@ -339,6 +359,39 @@
         
         document.getElementById('tableBody').innerHTML = tbody;
         document.getElementById('printArea').style.display = 'block';
+    }
+
+    // PDF Download function using HTML2PDF specifically for Mobile compatibility
+    function downloadPDF() {
+        const element = document.getElementById('printArea');
+        if(element.style.display === 'none') {
+            alert("Krupaya aadhi 'Generate List' var click kara!");
+            return;
+        }
+
+        // Add visual loading state
+        const btn = document.querySelector('.btn-print');
+        const oldText = btn.innerText;
+        btn.innerText = "Downloading PDF...";
+        
+        let shiftStr = document.getElementById('shift').value || "All";
+        let unitStr = document.getElementById('unit').value || "All";
+
+        var opt = {
+            margin:       [10, 10, 10, 10], // top, left, bottom, right margins
+            filename:     `Material_List_${shiftStr}_${unitStr}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Generate PDF
+        html2pdf().set(opt).from(element).save().then(() => {
+            btn.innerText = oldText;
+        }).catch(err => {
+            alert("PDF generate karnyat adchan aali.");
+            btn.innerText = oldText;
+        });
     }
 </script>
 </body>
